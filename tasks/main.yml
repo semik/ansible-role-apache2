@@ -1,0 +1,65 @@
+---
+- name: install apache2
+  apt:
+    name:
+      - apache2
+    cache_valid_time: "{{ apt_cache_valid_time }}"
+    update_cache: yes
+    state: present
+  notify: restart apache2
+
+- name: enable common apache2 modules
+  community.general.apache2_module:
+    state: present
+    name: "{{ item }}"
+  loop:
+    - md
+    - ssl
+    - headers
+  notify: restart apache2
+
+- name: enable custom apache2 modules
+  community.general.apache2_module:
+    state: present
+    name: "{{ item }}"
+  loop:
+    "{{ apache2_custom_modules }}"
+  notify: restart apache2
+
+- name: enable hosted sites
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/apache2/sites-enabled/{{ item.dest }}"
+  loop:
+    "{{ apache2_sites }}"
+  notify: restart apache2
+
+- name: configure SSL Protocols
+  lineinfile:
+    path: '/etc/apache2/mods-enabled/ssl.conf'
+    regexp: '^(#|) *SSLProtocol'
+    line: 'SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1'
+  notify: restart apache2
+
+- name: configure Cipher Suite protocols
+  lineinfile:
+    path: '/etc/apache2/mods-enabled/ssl.conf'
+    regexp: '^(#|) *SSLCipherSuite'
+    line: 'SSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384'
+  notify: restart apache2
+
+# enforce server cipher order ie. ignore clients offer
+- name: encforce server HonorCipherOrder
+  lineinfile:
+    path: '/etc/apache2/mods-enabled/ssl.conf'
+    regexp: '^(#|) *SSLHonorCipherOrder'
+    line: 'SSLHonorCipherOrder off'
+  notify: restart apache2
+
+# https://saywebsolutions.com/blog/disable-ssl-session-tickets-in-apache-2-4-debian-10
+- name: disable SSLSessionTickets
+  lineinfile:
+    path: '/etc/apache2/mods-enabled/ssl.conf'
+    regexp: '^(#|) *SSLSessionTickets'
+    line: 'SSLSessionTickets off'
+  notify: restart apache2
